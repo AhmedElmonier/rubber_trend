@@ -1,0 +1,16 @@
+requests
+beautifulsoup4
+pandas
+matplotlib
+sqlalchemy
+schedule
+python-telegram-bot
+statsmodels
+python-dotenv
+lxml
+openpyxl
+xgboost
+scikit-learn
+yfinance
+feedparser
+textblob
