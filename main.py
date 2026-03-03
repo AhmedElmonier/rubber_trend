@@ -44,6 +44,13 @@ def run_job():
     init_db()
     session = get_session()
     
+    if session.query(LatexPrice).count() == 0:
+        logger.info("Database is empty. Seeding with mock historical data for UI/charts.")
+        from seed_db import seed_database
+        session.close() # Close current so seed_db can handle transactions
+        seed_database()
+        session = get_session() # Re-open session after seeding
+    
     # 1. Fetch Today's Prices & FX
     today = datetime.date.today()
     yesterday = today - datetime.timedelta(days=1)
