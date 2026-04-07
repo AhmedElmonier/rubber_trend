@@ -20,8 +20,10 @@ def seed_database():
         base_price = random.uniform(low, high)
         for i in range(60, 0, -1):
             past_date = today - datetime.timedelta(days=i)
-            # Add some random walk for realism
-            base_price += random.uniform(-1.0, 1.0)
+            # Add proportional random walk for realism (e.g., +/- 1.5% daily change)
+            change_pct = random.uniform(-0.015, 0.015)
+            base_price = base_price * (1 + change_pct)
+            
             if base_price < low * 0.8: base_price = low * 0.8 # keep it somewhat bound
             
             # check if exists

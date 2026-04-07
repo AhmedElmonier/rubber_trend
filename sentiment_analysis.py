@@ -2,8 +2,58 @@ import feedparser
 from textblob import TextBlob
 import logging
 import urllib.parse
+import re
 
 logger = logging.getLogger(__name__)
+
+# Lazy initialization for FinBERT to save memory until used
+_finbert_pipeline = None
+
+def get_finbert_pipeline():
+    global _finbert_pipeline
+    if _finbert_pipeline is None:
+        try:
+            from transformers import pipeline
+            logger.info("Initializing FinBERT pipeline (this may take a moment for the first time)...")
+            # Using ProsusAI/finbert - one of the most popular financial sentiment models
+            _finbert_pipeline = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+        except Exception as e:
+            logger.error(f"Failed to load FinBERT: {e}. Falling back to TextBlob.")
+            _finbert_pipeline = "FALLBACK"
+    return _finbert_pipeline
+
+def analyze_sentiment(text):
+    """
+    Analyzes sentiment using FinBERT, falling back to TextBlob if needed.
+    Returns: (label, score) - score is normalized where 1.0 is most positive, -1.0 is most negative
+    """
+    pipe = get_finbert_pipeline()
+    
+    if pipe != "FALLBACK":
+        try:
+            # FinBERT returns labels: 'positive', 'negative', 'neutral'
+            result = pipe(text[:512])[0] # Limit to 512 tokens for BERT
+            label = result['label']
+            score = result['score'] # Confidence score (0 to 1)
+            
+            if label == 'positive':
+                return "Bullish", score
+            elif label == 'negative':
+                return "Bearish", -score
+            else:
+                return "Neutral", 0.0
+        except Exception as e:
+            logger.warning(f"FinBERT inference error: {e}. Using TextBlob fallback.")
+            
+    # TextBlob Fallback
+    blob = TextBlob(text)
+    score = blob.sentiment.polarity # -1 to 1
+    if score > 0.1:
+        return "Bullish", score
+    elif score < -0.1:
+        return "Bearish", score
+    else:
+        return "Neutral", 0.0
 
 def fetch_and_analyze_news(query="rubber price OR latex market"):
     """
@@ -24,32 +74,31 @@ def fetch_and_analyze_news(query="rubber price OR latex market"):
         article_count = 0
         top_headlines = []
         
-        for entry in feed.entries[:10]: # Analyze top 10 articles
+        # Analyze top 10 articles
+        for entry in feed.entries[:10]:
             title = entry.title
             
-            # Use TextBlob for simple polarity scoring (-1 to 1)
-            blob = TextBlob(title)
-            score = blob.sentiment.polarity
+            label, score = analyze_sentiment(title)
             
             total_score += score
             article_count += 1
             
             # Keep top 3 for the report
             if len(top_headlines) < 3:
-                top_headlines.append(f"- {title} (Score: {score:.2f})")
+                top_headlines.append(f"- {title} ({label}: {score:.2f})")
                 
         avg_score = total_score / article_count if article_count > 0 else 0
         
-        # Determine Label
-        if avg_score > 0.1:
-            label = "Bullish ⭐"
-        elif avg_score < -0.1:
-            label = "Bearish 🔻"
+        # Determine Final Label based on average score
+        if avg_score > 0.15:
+            final_label = "Bullish ⭐"
+        elif avg_score < -0.15:
+            final_label = "Bearish 🔻"
         else:
-            label = "Neutral ➖"
+            final_label = "Neutral ➖"
             
-        logger.info(f"Sentiment Analysis Complete: {label} ({avg_score:.2f})")
-        return label, avg_score, top_headlines
+        logger.info(f"Sentiment Analysis Complete: {final_label} ({avg_score:.2f})")
+        return final_label, avg_score, top_headlines
         
     except Exception as e:
         logger.error(f"Error during sentiment analysis: {e}")
@@ -58,7 +107,7 @@ def fetch_and_analyze_news(query="rubber price OR latex market"):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     label, score, headlines = fetch_and_analyze_news()
-    print(f"Overall Sentiment: {label} (Score: {score:.2f})")
-    print("Top Headlines:")
+    print(f"\nOverall Sentiment: {label} (Score: {score:.2f})")
+    print("Top Headlines with FinBERT Analysis:")
     for h in headlines:
         print(h)

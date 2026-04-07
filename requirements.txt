@@ -1,3 +1,5 @@
+streamlit
+plotly
 requests
 beautifulsoup4
 pandas
@@ -14,3 +16,6 @@ scikit-learn
 yfinance
 feedparser
 textblob
+transformers
+torch
+pytest
